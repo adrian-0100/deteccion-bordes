@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Detección de bordes con IA</title>
+   <style>
+      .modified-image {
+         max-width: 500px;
+      }
+      .additional-image {
+         max-width: 500px;
+         margin-top: 20px;
+      }
+      #opciones {
+         display: none;
+      }
+   </style>
+</head>
+<body>
+   <h1>Detección de bordes</h1>
+   <form id="upload-form" action="/" method="POST" enctype="multipart/form-data">
+      <input type="file"  id="image-upload" name="image" accept=".jpg,.jpeg,.png">
+      <button type="submit">Detectar bordes con OpenCV y PyTorch</button>
+   </form>
+   
+   <div class="image-container">
+      <img id="original-image" src="" alt="Imagen original">
+      <canvas id="simple-canvas"></canvas>
+      <canvas id="medium-canvas"></canvas>
+      <canvas id="complex-canvas"></canvas>
+   </div>
+   <div id="opciones">
+      <label for="method-select">Seleccione el método:</label>
+      <select id="method-select">
+         <option value="simple">Método sencillo</option>
+         <option value="medium">Método mediano</option>
+         <option value="complex">Método complejo</option>
+      </select>
+   </div>
+   
+   <div id="modified-image-container"></div>
+   <div id="additional-image-container"></div>
+   <script>
+    // Obtener elementos del DOM
+    const originalImage = document.getElementById('original-image');
+    const simpleCanvas = document.getElementById('simple-canvas');
+    const mediumCanvas = document.getElementById('medium-canvas');
+    const complexCanvas = document.getElementById('complex-canvas');
+    const iaCanvas = document.getElementById('ia-canvas');
+    const methodSelect = document.getElementById('method-select');
+    const imageUpload = document.getElementById('image-upload');
+
+    // Evento de cambio de método
+    methodSelect.addEventListener('change', function() {
+    const selectedMethod = methodSelect.value;
+    console.log(selectedMethod);
+    applyEdgeDetection(selectedMethod);
+    });
+
+    // Evento de cambio de imagen
+    imageUpload.addEventListener('change', function() {
+    const file = imageUpload.files[0];
+    const reader = new FileReader();
+
+    reader.onload = function(e) {
+        originalImage.src = e.target.result;
+        originalImage.onload = function() {
+        applyEdgeDetection(methodSelect.value);
+        };
+    };
+
+    reader.readAsDataURL(file);
+    });
+
+    // Función para aplicar la detección de bordes según el método seleccionado
+    function applyEdgeDetection(method) {
+    const image = new Image();
+    image.src = originalImage.src;
+
+    // Limpiar los canvas
+    clearCanvas(simpleCanvas);
+    clearCanvas(mediumCanvas);
+    clearCanvas(complexCanvas);
+
+
+
+    image.onload = function() {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.width = image.width;
+        canvas.height = image.height;
+        context.drawImage(image, 0, 0);
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+
+        switch (method) {
+        case 'simple4':
+            applySimpleEdgeDetection(pixels, canvas.width, canvas.height, simpleCanvas);
+            break;
+        case 'medium44':
+            applyMediumEdgeDetection(pixels, canvas.width, canvas.height, mediumCanvas);
+            break;
+        case 'complex44':
+            applyComplexEdgeDetection(pixels, canvas.width, canvas.height, complexCanvas);
+            break;
+        default:
+            applySimpleEdgeDetection(pixels, canvas.width, canvas.height, simpleCanvas);
+            applyMediumEdgeDetection(pixels, canvas.width, canvas.height, mediumCanvas);
+            applyComplexEdgeDetection(pixels, canvas.width, canvas.height, complexCanvas);
+            applyAIEdgeDetection(pixels, canvas.width, canvas.height, iaCanvas);
+    
+            break;
+        }
+    };
+    }
+
+    // Función para aplicar el método sencillo de detección de bordes --- MATRIZ DE CONVOLUCIÓN
+    function applySimpleEdgeDetection(pixels, width, height, canvas) {
+    const context = canvas.getContext('2d');
+    const threshold = 30;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+        const r = pixels[i];
+        const g = pixels[i + 1];
+        const b = pixels[i + 2];
+        const average = (r + g + b) / 3;
+
+        if (average < threshold) {
+        pixels[i] = 0;
+        pixels[i + 1] = 0;
+        pixels[i + 2] = 0;
+        } else {
+        pixels[i] = 255;
+        pixels[i + 1] = 255;
+        pixels[i + 2] = 255;
+        }
+    }
+
+    context.putImageData(new ImageData(pixels, width, height), 0, 0);
+    }
+
+    // Función para aplicar el método mediano de detección de bordes
+    function applyMediumEdgeDetection(pixels, width, height, canvas) {
+    const context = canvas.getContext('2d');
+    const threshold = 30;
+
+    // Matriz de convolución para la detección de bordes
+    const kernel = [
+        [-1, -1, -1],
+        [-1,  8, -1],
+        [-1, -1, -1]
+    ];
+
+    const halfKernelSize = Math.floor(kernel.length / 2);
+
+    // Función auxiliar para aplicar la matriz de convolución a un píxel
+    function applyKernel(pixelIndex) {
+        let sum = 0;
+
+        for (let y = 0; y < kernel.length; y++) {
+        for (let x = 0; x < kernel[y].length; x++) {
+            const offsetX = x - halfKernelSize;
+            const offsetY = y - halfKernelSize;
+            const neighborIndex = pixelIndex + (offsetX + offsetY * width) * 4;
+
+            const neighborR = pixels[neighborIndex];
+            const neighborG = pixels[neighborIndex + 1];
+            const neighborB = pixels[neighborIndex + 2];
+            const neighborAverage = (neighborR + neighborG + neighborB) / 3;
+
+            sum += neighborAverage * kernel[y][x];
+        }
+        }
+
+        return sum;
+    }
+
+    for (let i = 0; i < pixels.length; i += 4) {
+        const edgeValue = applyKernel(i);
+        const average = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+
+        if (Math.abs(edgeValue) > threshold) {
+        pixels[i] = 0;
+        pixels[i + 1] = 0;
+        pixels[i + 2] = 0;
+        } else {
+        pixels[i] = 255;
+        pixels[i + 1] = 255;
+        pixels[i + 2] = 255;
+        }
+    }
+
+    context.putImageData(new ImageData(pixels, width, height), 0, 0);
+    }
+
+
+    // Función para aplicar el método complejo de detección de bordes  ------- SOBEL
+    function applyComplexEdgeDetection(pixels, width, height, canvas) {
+    const context = canvas.getContext('2d');
+    const threshold = 30;
+
+    // Matrices de convolución para la detección de bordes en las direcciones X e Y
+    const kernelX = [
+        [-1, 0, 1],
+        [-2, 0, 2],
+        [-1, 0, 1]
+    ];
+
+    const kernelY = [
+        [-1, -2, -1],
+        [0, 0, 0],
+        [1, 2, 1]
+    ];
+
+    const halfKernelSize = Math.floor(kernelX.length / 2);
+
+    // Función auxiliar para aplicar una matriz de convolución a un píxel
+    function applyKernel(pixelIndex, kernel) {
+        let sum = 0;
+
+        for (let y = 0; y < kernel.length; y++) {
+        for (let x = 0; x < kernel[y].length; x++) {
+            const offsetX = x - halfKernelSize;
+            const offsetY = y - halfKernelSize;
+            const neighborIndex = pixelIndex + (offsetX + offsetY * width) * 4;
+
+            const neighborR = pixels[neighborIndex];
+            const neighborG = pixels[neighborIndex + 1];
+            const neighborB = pixels[neighborIndex + 2];
+            const neighborAverage = (neighborR + neighborG + neighborB) / 3;
+
+            sum += neighborAverage * kernel[y][x];
+        }
+        }
+
+        return sum;
+    }
+
+    for (let i = 0; i < pixels.length; i += 4) {
+        const edgeValueX = applyKernel(i, kernelX);
+        const edgeValueY = applyKernel(i, kernelY);
+
+        const edgeValue = Math.sqrt(edgeValueX * edgeValueX + edgeValueY * edgeValueY);
+        const average = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+
+        if (edgeValue > threshold) {
+        pixels[i] = 0;
+        pixels[i + 1] = 0;
+        pixels[i + 2] = 0;
+        } else {
+        pixels[i] = 255;
+        pixels[i + 1] = 255;
+        pixels[i + 2] = 255;
+        }
+    }
+
+    context.putImageData(new ImageData(pixels, width, height), 0, 0);
+    }
+
+    // Función para aplicar el método de detección de bordes con IA
+
+    // Función para limpiar un canvas
+    function clearCanvas(canvas) {
+    const context = canvas.getContext('2d');
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+</script>
+   <script>
+      const form = document.getElementById('upload-form');
+      const modifiedImageContainer = document.getElementById('modified-image-container');
+      const additionalImageContainer = document.getElementById('additional-image-container');
+
+      form.addEventListener('submit', async (event) => {
+         event.preventDefault();
+
+         const formData = new FormData(form);
+
+         try {
+            const response = await fetch('/', {
+               method: 'POST',
+               body: formData
+            });
+
+            if (response.ok) {
+               const result = await response.json();
+               const modifiedImageURL = result.modified_image_url;
+               const additionalImageURL = result.additional_image_url;
+
+               modifiedImageContainer.innerHTML = `<img class="modified-image" src="${modifiedImageURL}" alt="Modified Image">`;
+               additionalImageContainer.innerHTML = `<img class="additional-image" src="${additionalImageURL}" alt="Additional Image">`;
+            }
+         } catch (error) {
+            console.error(error);
+         }
+      });
+   </script>
+</body>
+</html>
